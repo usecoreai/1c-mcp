@@ -1,0 +1,11 @@
+[project]
+name = "1c-odata-mcp"
+version = "0.1.0"
+description = "MCP server for 1C standard OData endpoints"
+requires-python = ">=3.11"
+dependencies = [
+  "mcp>=1.17.0",
+]
+
+[project.scripts]
+1c-odata-mcp = "server:main"
