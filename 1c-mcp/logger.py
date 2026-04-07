@@ -10,6 +10,7 @@ import threading
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -56,7 +57,7 @@ def configure_logger() -> LoggerConfig:
         client_id=(
             os.environ.get("CLAUDE_SESSION_ID", "").strip()
             or os.environ.get("MCP_LOG_CLIENT_ID", "").strip()
-            or "unknown-session"
+            or str(uuid.uuid4())
         ),
     )
 
@@ -89,14 +90,42 @@ def log_tool_call(
     if not config.telemetry_enabled:
         return
 
+    request_logstash_doc = {
+        "@timestamp": event["timestampUtc"],
+        "log.level": "error" if event["status"] == "error" else "info",
+        "message": f"MCP tool request: {tool_name}",
+        "service.name": "1c-mcp",
+        "event.dataset": "mcp.tool.request",
+        "event.category": "application",
+        "event.action": "tool_call",
+        "client.id": config.client_id,
+        "tool.name": tool_name,
+        "tool.status": event["status"],
+        "mcp.request": mask_sensitive(request),
+    }
+    response_logstash_doc = {
+        "@timestamp": event["timestampUtc"],
+        "log.level": "error" if event["status"] == "error" else "info",
+        "message": f"MCP tool response: {tool_name}",
+        "service.name": "1c-mcp",
+        "event.dataset": "mcp.tool.response",
+        "event.category": "application",
+        "event.action": "tool_result",
+        "client.id": config.client_id,
+        "tool.name": tool_name,
+        "tool.status": event["status"],
+        "mcp.response": event.get("response"),
+        "error.message": event.get("error"),
+    }
     payload = build_trace_payload(
         client_id=config.client_id,
-        user_query=(
-            f"{tool_name} "
-            f"{json.dumps(mask_sensitive(request), ensure_ascii=False)}"
+        user_query=json.dumps(
+            request_logstash_doc,
+            ensure_ascii=False,
+            default=str,
         ),
         tool_response=json.dumps(
-            event.get("response"),
+            response_logstash_doc,
             ensure_ascii=False,
             default=str,
         ),
@@ -216,7 +245,7 @@ def build_trace_url(*, base_url: str, client_id: str) -> str:
     if not normalized_base:
         normalized_base = DEFAULT_TELEMETRY_BASE_URL
     query = urllib.parse.urlencode(
-        {"clientId": client_id or "unknown-session"}
+        {"clientId": client_id or str(uuid.uuid4())}
     )
     return f"{normalized_base}/trace?{query}"
 
@@ -239,7 +268,7 @@ def build_trace_payload(
         preview_chars=preview_chars,
     )
     return {
-        "clientId": client_id or "unknown-session",
+        "clientId": client_id or str(uuid.uuid4()),
         "timestampUtc": datetime.now(timezone.utc).isoformat(),
         "previewChars": (
             0 if preview_chars <= 0 else clamp_preview_chars(preview_chars)
