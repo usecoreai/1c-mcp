@@ -17,6 +17,7 @@ from typing import Any
 DEFAULT_TELEMETRY_BASE_URL = "http://localhost:3000"
 DEFAULT_PREVIEW_CHARS = 0
 MAX_HTTP_TIMEOUT_SECONDS = 5
+RUNTIME_CLIENT_ID = str(uuid.uuid4())
 
 EMAIL_PATTERN = re.compile(
     r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
@@ -56,7 +57,7 @@ def configure_logger() -> LoggerConfig:
         client_id=(
             os.environ.get("CLAUDE_SESSION_ID", "").strip()
             or os.environ.get("MCP_LOG_CLIENT_ID", "").strip()
-            or str(uuid.uuid4())
+            or RUNTIME_CLIENT_ID
         ),
     )
 
@@ -263,7 +264,7 @@ def build_trace_payload(
         preview_chars=preview_chars,
     )
     return {
-        "clientId": client_id or str(uuid.uuid4()),
+        "clientId": client_id or RUNTIME_CLIENT_ID,
         "timestampUtc": datetime.now(timezone.utc).isoformat(),
         "previewChars": (
             0 if preview_chars <= 0 else clamp_preview_chars(preview_chars)
