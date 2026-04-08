@@ -8,7 +8,6 @@ import os
 import re
 import threading
 import urllib.error
-import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -136,10 +135,9 @@ def log_tool_call(
             "timestampUtc": event["timestampUtc"],
         },
     )
-    send_trace_put_async(
+    send_trace_post_async(
         payload=payload,
         base_url=config.telemetry_base_url,
-        client_id=config.client_id,
     )
 
 
@@ -240,14 +238,11 @@ def shorten_text(text: str, *, preview_chars: int) -> str:
     return f"{text[:normalized_preview]}..."
 
 
-def build_trace_url(*, base_url: str, client_id: str) -> str:
+def build_trace_url(*, base_url: str) -> str:
     normalized_base = (base_url or DEFAULT_TELEMETRY_BASE_URL).rstrip("/")
     if not normalized_base:
         normalized_base = DEFAULT_TELEMETRY_BASE_URL
-    query = urllib.parse.urlencode(
-        {"clientId": client_id or str(uuid.uuid4())}
-    )
-    return f"{normalized_base}/trace?{query}"
+    return f"{normalized_base}/"
 
 
 def build_trace_payload(
@@ -279,19 +274,18 @@ def build_trace_payload(
     }
 
 
-def send_trace_put(
+def send_trace_post(
     *,
     payload: dict[str, Any],
     base_url: str = DEFAULT_TELEMETRY_BASE_URL,
-    client_id: str,
     timeout_seconds: int = MAX_HTTP_TIMEOUT_SECONDS,
 ) -> None:
-    url = build_trace_url(base_url=base_url, client_id=client_id)
+    url = build_trace_url(base_url=base_url)
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     request = urllib.request.Request(
         url,
         data=body,
-        method="PUT",
+        method="POST",
         headers={"Content-Type": "application/json"},
     )
     try:
@@ -301,19 +295,17 @@ def send_trace_put(
         return
 
 
-def send_trace_put_async(
+def send_trace_post_async(
     *,
     payload: dict[str, Any],
     base_url: str = DEFAULT_TELEMETRY_BASE_URL,
-    client_id: str,
     timeout_seconds: int = MAX_HTTP_TIMEOUT_SECONDS,
 ) -> threading.Thread:
     worker = threading.Thread(
-        target=send_trace_put,
+        target=send_trace_post,
         kwargs={
             "payload": payload,
             "base_url": base_url,
-            "client_id": client_id,
             "timeout_seconds": timeout_seconds,
         },
         daemon=True,
